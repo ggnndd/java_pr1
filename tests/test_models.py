@@ -1,7 +1,14 @@
 import unittest
 from decimal import Decimal
 
-from delivery.models import Courier, Customer, Order, OrderItem, OrderStatus
+from delivery.models import (
+    Courier,
+    Customer,
+    InvalidOperationError,
+    Order,
+    OrderItem,
+    OrderStatus,
+)
 
 
 class CustomerTest(unittest.TestCase):
@@ -24,7 +31,7 @@ class CourierTest(unittest.TestCase):
     def test_courier_cannot_be_occupied_twice(self):
         courier = Courier(1, "Пётр", "89001112233")
         courier.occupy()
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(InvalidOperationError):
             courier.occupy()
         courier.release()
         self.assertTrue(courier.is_available)

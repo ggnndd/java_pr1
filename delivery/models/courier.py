@@ -1,5 +1,6 @@
 """Курьер службы доставки."""
 
+from delivery.models.errors import InvalidOperationError
 from delivery.models.validation import (
     require_not_blank,
     require_phone,
@@ -36,10 +37,10 @@ class Courier:
         """Занимает курьера под заказ.
 
         Raises:
-            RuntimeError: если курьер уже занят другим заказом.
+            InvalidOperationError: если курьер уже занят другим заказом.
         """
         if not self._available:
-            raise RuntimeError(f"Курьер {self._name} уже занят другим заказом")
+            raise InvalidOperationError(f"Курьер {self._name} уже занят другим заказом")
         self._available = False
 
     def release(self) -> None:
