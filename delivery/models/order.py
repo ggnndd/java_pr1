@@ -91,6 +91,11 @@ class Order:
         return self._delivery_method.estimate_time(self)
 
     @property
+    def is_editable(self) -> bool:
+        """Можно ли менять состав заказа и способ доставки."""
+        return self._status is OrderStatus.CREATED
+
+    @property
     def available_statuses(self) -> tuple[OrderStatus, ...]:
         """Статусы, в которые можно перевести заказ из текущего."""
         if self._delivery_method is None:
@@ -136,6 +141,20 @@ class Order:
         """
         if not isinstance(courier, Courier):
             raise TypeError("Ожидается курьер")
+        self.validate_courier_assignment()
+        if courier is self._courier:
+            return
+        courier.occupy()
+        self._unassign_courier()
+        self._courier = courier
+
+    def validate_courier_assignment(self) -> None:
+        """Проверяет, можно ли сейчас назначить курьера на заказ.
+
+        Raises:
+            InvalidOperationError: если способ доставки не выбран или
+                не требует курьера либо заказ уже передан в доставку.
+        """
         if self._delivery_method is None:
             raise InvalidOperationError("Сначала выберите способ доставки")
         if not self._delivery_method.requires_courier:
@@ -146,11 +165,6 @@ class Order:
             raise InvalidOperationError(
                 f"Нельзя назначить курьера: заказ в статусе «{self._status.title}»"
             )
-        if courier is self._courier:
-            return
-        courier.occupy()
-        self._unassign_courier()
-        self._courier = courier
 
     def change_status(self, new_status: OrderStatus) -> None:
         """Переводит заказ в новый статус, если переход допустим.
@@ -182,7 +196,7 @@ class Order:
         )
 
     def _ensure_editable(self, action: str) -> None:
-        if self._status is not OrderStatus.CREATED:
+        if not self.is_editable:
             raise InvalidOperationError(
                 f"Нельзя {action}: заказ в статусе «{self._status.title}»"
             )
