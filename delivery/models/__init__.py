@@ -12,6 +12,8 @@ from delivery.models.errors import InvalidOperationError
 from delivery.models.order import Order
 from delivery.models.order_item import OrderItem
 from delivery.models.order_status import OrderStatus
+from delivery.models.person import Person
+from delivery.models.product import Product
 
 __all__ = [
     "Courier",
@@ -22,6 +24,8 @@ __all__ = [
     "Order",
     "OrderItem",
     "OrderStatus",
+    "Person",
     "PickupDelivery",
+    "Product",
     "StandardDelivery",
 ]

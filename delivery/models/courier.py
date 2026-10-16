@@ -1,33 +1,21 @@
 """Курьер службы доставки."""
 
 from delivery.models.errors import InvalidOperationError
-from delivery.models.validation import (
-    require_not_blank,
-    require_phone,
-    require_positive_int,
-)
+from delivery.models.person import Person
+from delivery.models.validation import require_positive_int
 
 
-class Courier:
+class Courier(Person):
     """Курьер. Одновременно может выполнять только один заказ."""
 
     def __init__(self, courier_id: int, name: str, phone: str) -> None:
+        super().__init__(name, phone)
         self._id = require_positive_int(courier_id, "Идентификатор курьера")
-        self._name = require_not_blank(name, "Имя курьера")
-        self._phone = require_phone(phone)
         self._available = True
 
     @property
     def id(self) -> int:
         return self._id
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def phone(self) -> str:
-        return self._phone
 
     @property
     def is_available(self) -> bool:
@@ -40,7 +28,7 @@ class Courier:
             InvalidOperationError: если курьер уже занят другим заказом.
         """
         if not self._available:
-            raise InvalidOperationError(f"Курьер {self._name} уже занят другим заказом")
+            raise InvalidOperationError(f"Курьер {self.name} уже занят другим заказом")
         self._available = False
 
     def release(self) -> None:
@@ -49,4 +37,4 @@ class Courier:
 
     def __str__(self) -> str:
         state = "свободен" if self._available else "занят"
-        return f"#{self._id} {self._name} ({self._phone}) — {state}"
+        return f"#{self._id} {super().__str__()} — {state}"

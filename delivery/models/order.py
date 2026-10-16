@@ -11,6 +11,7 @@ from delivery.models.delivery_methods import DeliveryMethod
 from delivery.models.errors import InvalidOperationError
 from delivery.models.order_item import OrderItem
 from delivery.models.order_status import OrderStatus
+from delivery.models.product import Product
 from delivery.models.validation import require_not_blank, require_positive_int
 
 
@@ -18,7 +19,8 @@ class Order:
     """Заказ: клиент, адрес доставки, позиции, способ доставки, курьер и статус.
 
     Состояние изменяется только через методы, которые проверяют
-    допустимость операции.
+    допустимость операции. Товары резервируются на складе при добавлении
+    в заказ и возвращаются на склад при его отмене.
     """
 
     def __init__(self, order_id: int, customer: Customer, address: str) -> None:
@@ -26,11 +28,16 @@ class Order:
             raise TypeError("Заказ должен содержать клиента")
         self._id = require_positive_int(order_id, "Номер заказа")
         self._customer = customer
-        self._address = require_not_blank(address, "Адрес доставки")
+        self._address = self.validate_address(address)
         self._items: list[OrderItem] = []
         self._status = OrderStatus.CREATED
         self._delivery_method: DeliveryMethod | None = None
         self._courier: Courier | None = None
+
+    @staticmethod
+    def validate_address(address: str) -> str:
+        """Проверяет адрес доставки."""
+        return require_not_blank(address, "Адрес доставки")
 
     @property
     def id(self) -> int:
@@ -104,16 +111,31 @@ class Order:
             return ()
         return self._delivery_method.next_statuses(self._status)
 
-    def add_item(self, item: OrderItem) -> None:
-        """Добавляет позицию в заказ.
+    def add_product(self, product: Product, quantity: int) -> OrderItem:
+        """Резервирует товар на складе и добавляет его в заказ.
+
+        Если товар уже есть в заказе, его количество увеличивается.
+
+        Returns:
+            Позиция заказа с итоговым количеством товара.
 
         Raises:
-            InvalidOperationError: если заказ уже подтверждён.
+            ValueError: если количество некорректно.
+            InvalidOperationError: если заказ уже подтверждён или
+                товара на складе недостаточно.
         """
-        if not isinstance(item, OrderItem):
-            raise TypeError("Ожидается позиция заказа")
-        self._ensure_editable("добавить позицию")
+        if not isinstance(product, Product):
+            raise TypeError("Ожидается товар")
+        self._ensure_editable("добавить товар")
+        product.reserve(quantity)
+        for index, existing in enumerate(self._items):
+            if existing.product is product:
+                item = OrderItem(product, existing.quantity + quantity)
+                self._items[index] = item
+                return item
+        item = OrderItem(product, quantity)
         self._items.append(item)
+        return item
 
     def set_delivery_method(self, method: DeliveryMethod) -> None:
         """Выбирает способ доставки.
@@ -185,6 +207,12 @@ class Order:
         self._status = new_status
         if new_status.is_final and self._courier is not None:
             self._courier.release()
+        if new_status is OrderStatus.CANCELLED:
+            self._return_items_to_stock()
+
+    def _return_items_to_stock(self) -> None:
+        for item in self._items:
+            item.product.release(item.quantity)
 
     def _needs_courier_for(self, new_status: OrderStatus) -> bool:
         method = self._delivery_method

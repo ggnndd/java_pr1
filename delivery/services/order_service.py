@@ -1,11 +1,10 @@
-"""Сервис управления заказами и курьерами."""
+"""Сервис управления заказами."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 
 from delivery.models import (
-    Courier,
     Customer,
     DeliveryMethod,
     ExpressDelivery,
@@ -15,10 +14,9 @@ from delivery.models import (
     PickupDelivery,
     StandardDelivery,
 )
-
-
-class NotFoundError(LookupError):
-    """Запрошенный объект не найден."""
+from delivery.services.courier_service import CourierService
+from delivery.services.errors import NotFoundError
+from delivery.services.product_service import ProductService
 
 
 def default_delivery_methods() -> list[DeliveryMethod]:
@@ -31,20 +29,25 @@ def default_delivery_methods() -> list[DeliveryMethod]:
 
 
 class OrderService:
-    """Хранит заказы и курьеров в памяти и выполняет операции над ними.
+    """Хранит заказы в памяти и выполняет операции над ними.
 
-    Сервис не взаимодействует с консолью: он принимает данные,
-    делегирует проверки сущностям и возвращает результат либо
-    выбрасывает исключение.
+    Курьеров и товары сервис получает из отдельных сервисов, переданных
+    в конструктор. С консолью сервис не взаимодействует: проверки
+    выполняют сущности, ошибки передаются вызывающему коду.
     """
 
-    def __init__(self, delivery_methods: Iterable[DeliveryMethod] | None = None) -> None:
+    def __init__(
+        self,
+        courier_service: CourierService,
+        product_service: ProductService,
+        delivery_methods: Iterable[DeliveryMethod] | None = None,
+    ) -> None:
+        self._courier_service = courier_service
+        self._product_service = product_service
         methods = list(delivery_methods) if delivery_methods is not None else None
         self._delivery_methods = methods or default_delivery_methods()
         self._orders: dict[int, Order] = {}
-        self._couriers: dict[int, Courier] = {}
-        self._next_order_id = 1
-        self._next_courier_id = 1
+        self._next_id = 1
 
     @property
     def delivery_methods(self) -> tuple[DeliveryMethod, ...]:
@@ -53,9 +56,9 @@ class OrderService:
 
     def create_order(self, customer_name: str, phone: str, address: str) -> Order:
         """Создаёт новый заказ с уникальным номером."""
-        order = Order(self._next_order_id, Customer(customer_name, phone), address)
+        order = Order(self._next_id, Customer(customer_name, phone), address)
         self._orders[order.id] = order
-        self._next_order_id += 1
+        self._next_id += 1
         return order
 
     def get_order(self, order_id: int) -> Order:
@@ -73,14 +76,11 @@ class OrderService:
         """Возвращает все заказы в порядке создания."""
         return list(self._orders.values())
 
-    def add_item(
-        self, order_id: int, product_name: str, quantity: int, price
-    ) -> OrderItem:
-        """Добавляет позицию в заказ и возвращает её."""
+    def add_product(self, order_id: int, product_id: int, quantity: int) -> OrderItem:
+        """Резервирует товар со склада и добавляет его в заказ."""
         order = self.get_order(order_id)
-        item = OrderItem(product_name, quantity, price)
-        order.add_item(item)
-        return item
+        product = self._product_service.get_product(product_id)
+        return order.add_product(product, quantity)
 
     def set_delivery_method(self, order_id: int, method: DeliveryMethod) -> Order:
         """Выбирает для заказа способ доставки из списка доступных."""
@@ -90,36 +90,10 @@ class OrderService:
         order.set_delivery_method(method)
         return order
 
-    def hire_courier(self, name: str, phone: str) -> Courier:
-        """Добавляет нового курьера в штат."""
-        courier = Courier(self._next_courier_id, name, phone)
-        self._couriers[courier.id] = courier
-        self._next_courier_id += 1
-        return courier
-
-    def get_courier(self, courier_id: int) -> Courier:
-        """Возвращает курьера по идентификатору.
-
-        Raises:
-            NotFoundError: если курьера с таким идентификатором нет.
-        """
-        try:
-            return self._couriers[courier_id]
-        except KeyError:
-            raise NotFoundError(f"Курьер #{courier_id} не найден") from None
-
-    def list_couriers(self) -> list[Courier]:
-        """Возвращает всех курьеров."""
-        return list(self._couriers.values())
-
-    def available_couriers(self) -> list[Courier]:
-        """Возвращает свободных курьеров."""
-        return [courier for courier in self._couriers.values() if courier.is_available]
-
     def assign_courier(self, order_id: int, courier_id: int) -> Order:
         """Назначает курьера на заказ."""
         order = self.get_order(order_id)
-        order.assign_courier(self.get_courier(courier_id))
+        order.assign_courier(self._courier_service.get_courier(courier_id))
         return order
 
     def change_status(self, order_id: int, new_status: OrderStatus) -> Order:

@@ -2,27 +2,30 @@
 
 from decimal import Decimal
 
-from delivery.models.validation import (
-    require_not_blank,
-    require_positive_int,
-    require_positive_money,
-)
+from delivery.models.product import Product
+from delivery.models.validation import require_positive_int
 
 
 class OrderItem:
-    """Позиция заказа: товар, количество и цена за единицу.
+    """Позиция заказа: товар со склада, количество и цена за единицу.
 
-    Объект неизменяемый: после создания позицию нельзя отредактировать.
+    Цена фиксируется в момент создания позиции. Объект неизменяемый.
     """
 
-    def __init__(self, product_name: str, quantity: int, price) -> None:
-        self._product_name = require_not_blank(product_name, "Название товара")
+    def __init__(self, product: Product, quantity: int) -> None:
+        if not isinstance(product, Product):
+            raise TypeError("Позиция заказа должна ссылаться на товар")
+        self._product = product
         self._quantity = require_positive_int(quantity, "Количество")
-        self._price = require_positive_money(price, "Цена")
+        self._price = product.price
+
+    @property
+    def product(self) -> Product:
+        return self._product
 
     @property
     def product_name(self) -> str:
-        return self._product_name
+        return self._product.name
 
     @property
     def quantity(self) -> int:
@@ -39,6 +42,6 @@ class OrderItem:
 
     def __str__(self) -> str:
         return (
-            f"{self._product_name} × {self._quantity} "
+            f"{self.product_name} × {self._quantity} "
             f"по {self._price} = {self.total} руб."
         )

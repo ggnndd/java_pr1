@@ -7,9 +7,9 @@ from delivery.models import (
     ExpressDelivery,
     InvalidOperationError,
     Order,
-    OrderItem,
     OrderStatus,
     PickupDelivery,
+    Product,
     StandardDelivery,
 )
 
@@ -18,8 +18,23 @@ class OrderWorkflowTest(unittest.TestCase):
 
     def setUp(self):
         self.order = Order(1, Customer("Иван", "89001234567"), "ул. Ленина, 1")
-        self.order.add_item(OrderItem("Пицца", 2, 500))
+        self.pizza = Product(1, "Пицца", 500, 10)
+        self.order.add_product(self.pizza, 2)
         self.courier = Courier(1, "Пётр", "89001112233")
+
+    def test_cancel_returns_products_to_stock(self):
+        self.order.change_status(OrderStatus.CANCELLED)
+        self.assertEqual(10, self.pizza.stock)
+
+    def test_delivery_does_not_return_products(self):
+        self.order.set_delivery_method(PickupDelivery("ТЦ «Центр»"))
+        for status in (
+            OrderStatus.CONFIRMED,
+            OrderStatus.READY_FOR_PICKUP,
+            OrderStatus.DELIVERED,
+        ):
+            self.order.change_status(status)
+        self.assertEqual(8, self.pizza.stock)
 
     def test_courier_delivery_full_cycle(self):
         self.order.set_delivery_method(StandardDelivery())
@@ -105,7 +120,7 @@ class OrderWorkflowTest(unittest.TestCase):
         self.order.set_delivery_method(PickupDelivery("ТЦ «Центр»"))
         self.order.change_status(OrderStatus.CONFIRMED)
         with self.assertRaises(InvalidOperationError):
-            self.order.add_item(OrderItem("Сок", 1, 100))
+            self.order.add_product(self.pizza, 1)
         with self.assertRaises(InvalidOperationError):
             self.order.set_delivery_method(StandardDelivery())
 

@@ -6,16 +6,16 @@ from delivery.models import (
     Customer,
     ExpressDelivery,
     Order,
-    OrderItem,
     OrderStatus,
     PickupDelivery,
+    Product,
     StandardDelivery,
 )
 
 
 def make_order(price, quantity=1):
     order = Order(1, Customer("Иван", "89001234567"), "ул. Ленина, 1")
-    order.add_item(OrderItem("Товар", quantity, price))
+    order.add_product(Product(1, "Товар", price, 100), quantity)
     return order
 
 

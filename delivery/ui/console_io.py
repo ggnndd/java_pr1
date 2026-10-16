@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from decimal import Decimal, InvalidOperation
 from typing import TypeVar
 
 T = TypeVar("T")
@@ -69,19 +68,21 @@ class ConsoleIO:
             else:
                 return value
 
-    def read_price(self, prompt: str) -> Decimal:
-        """Читает положительную денежную сумму (допускается запятая)."""
+    def read_valid(self, prompt: str, validate: Callable[[str], T]) -> T:
+        """Читает значение и сразу проверяет его функцией validate.
+
+        Если validate выбрасывает ValueError, показывается сообщение
+        и запрашивается только это же поле.
+
+        Returns:
+            Результат validate (например, нормализованное значение).
+        """
         while True:
             raw = self.read_text(prompt)
             try:
-                value = Decimal(raw.replace(",", "."))
-            except InvalidOperation:
-                self.error(f"«{raw}» не является числом")
-                continue
-            if not value.is_finite() or value <= 0:
-                self.error("сумма должна быть больше нуля")
-            else:
-                return value
+                return validate(raw)
+            except ValueError as error:
+                self.error(str(error))
 
     def confirm(self, prompt: str) -> bool:
         """Задаёт вопрос «да/нет»."""
@@ -98,15 +99,16 @@ class ConsoleIO:
         title: str,
         options: Sequence[T],
         describe: Callable[[T], str] = str,
+        back_label: str = "Назад",
     ) -> T | None:
         """Предлагает выбрать вариант из списка.
 
         Returns:
-            Выбранный вариант или None, если пользователь выбрал «Назад».
+            Выбранный вариант или None, если пользователь выбрал пункт 0.
         """
         self.show(title)
         for number, option in enumerate(options, start=1):
             self.show(f"  {number}. {describe(option)}")
-        self.show("  0. Назад")
+        self.show(f"  0. {back_label}")
         choice = self.read_int("Ваш выбор: ", min_value=0, max_value=len(options))
         return None if choice == 0 else options[choice - 1]

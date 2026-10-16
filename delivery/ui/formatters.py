@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
-from delivery.models import Courier, DeliveryMethod, Order
+from delivery.models import Courier, DeliveryMethod, Order, Product
 
 
 def plural(number: int, forms: tuple[str, str, str]) -> str:
@@ -41,6 +41,10 @@ def format_delivery_option(method: DeliveryMethod, order: Order) -> str:
 
 def format_courier(courier: Courier) -> str:
     return str(courier)
+
+
+def format_product(product: Product) -> str:
+    return f"{product.name} — {format_money(product.price)}, в наличии: {product.stock} шт."
 
 
 def format_order_line(order: Order) -> str:
