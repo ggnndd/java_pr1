@@ -41,12 +41,36 @@ class OrderWorkflowTest(unittest.TestCase):
         self.order.assign_courier(self.courier)
         self.order.change_status(OrderStatus.CONFIRMED)
         self.order.change_status(OrderStatus.IN_DELIVERY)
-        self.assertFalse(self.courier.is_available)
+        self.assertIs(self.order, self.courier.current_order)
 
         self.order.change_status(OrderStatus.DELIVERED)
         self.assertIs(OrderStatus.DELIVERED, self.order.status)
-        self.assertTrue(self.courier.is_available)
+        self.assertIsNone(self.courier.current_order)
+        self.assertIs(self.courier, self.order.courier)  # история сохраняется
         self.assertEqual((), self.order.available_statuses)
+
+    def test_courier_is_bound_to_order(self):
+        self.order.set_delivery_method(StandardDelivery())
+        self.order.assign_courier(self.courier)
+        self.assertIs(self.order, self.courier.current_order)
+        self.assertIn("выполняет заказ #1", str(self.courier))
+
+    def test_cannot_release_courier_of_active_order(self):
+        self.order.set_delivery_method(StandardDelivery())
+        self.order.assign_courier(self.courier)
+        self.order.change_status(OrderStatus.CONFIRMED)
+        self.order.change_status(OrderStatus.IN_DELIVERY)
+        with self.assertRaises(InvalidOperationError):
+            self.courier.release_order(self.order)
+        self.assertIs(self.order, self.courier.current_order)
+
+    def test_cannot_take_another_order_directly(self):
+        other = Order(2, Customer("Анна", "89005556677"), "ул. Мира, 5")
+        self.order.set_delivery_method(StandardDelivery())
+        self.order.assign_courier(self.courier)
+        with self.assertRaises(InvalidOperationError):
+            self.courier.take_order(other)
+        self.assertIs(self.order, self.courier.current_order)
 
     def test_pickup_full_cycle_without_courier(self):
         self.order.set_delivery_method(PickupDelivery("ТЦ «Центр»"))
@@ -101,13 +125,16 @@ class OrderWorkflowTest(unittest.TestCase):
         self.order.set_delivery_method(StandardDelivery())
         with self.assertRaises(InvalidOperationError):
             self.order.assign_courier(self.courier)
+        self.assertIsNone(self.order.courier)
+        self.assertIs(other, self.courier.current_order)
 
     def test_reassigning_courier_releases_previous(self):
         second = Courier(2, "Ольга", "89004445566")
         self.order.set_delivery_method(StandardDelivery())
         self.order.assign_courier(self.courier)
         self.order.assign_courier(second)
-        self.assertTrue(self.courier.is_available)
+        self.assertIsNone(self.courier.current_order)
+        self.assertIs(self.order, second.current_order)
         self.assertIs(second, self.order.courier)
 
     def test_cancel_releases_courier(self):

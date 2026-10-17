@@ -41,13 +41,23 @@ class CustomerTest(unittest.TestCase):
 
 class CourierTest(unittest.TestCase):
 
-    def test_courier_cannot_be_occupied_twice(self):
-        courier = Courier(1, "Пётр", "89001112233")
-        courier.occupy()
+    def setUp(self):
+        self.courier = Courier(1, "Пётр", "89001112233")
+        self.order = Order(1, Customer("Иван", "89001234567"), "ул. Ленина, 1")
+
+    def test_new_courier_is_free(self):
+        self.assertTrue(self.courier.is_available)
+        self.assertIsNone(self.courier.current_order)
+        self.assertIn("свободен", str(self.courier))
+
+    def test_cannot_take_order_bypassing_order(self):
         with self.assertRaises(InvalidOperationError):
-            courier.occupy()
-        courier.release()
-        self.assertTrue(courier.is_available)
+            self.courier.take_order(self.order)
+        self.assertTrue(self.courier.is_available)
+
+    def test_cannot_release_order_it_does_not_have(self):
+        with self.assertRaises(InvalidOperationError):
+            self.courier.release_order(self.order)
 
 
 class ProductTest(unittest.TestCase):

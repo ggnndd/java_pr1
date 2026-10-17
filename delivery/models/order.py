@@ -156,19 +156,32 @@ class Order:
     def assign_courier(self, courier: Courier) -> None:
         """Назначает курьера на заказ, заменяя ранее назначенного.
 
+        Заказ и курьер ссылаются друг на друга: заказ запоминает курьера,
+        курьер закрепляет за собой заказ. Прежний курьер освобождается.
+
         Raises:
             InvalidOperationError: если способ доставки не выбран или
                 не требует курьера, заказ уже передан в доставку
-                или курьер занят.
+                или курьер выполняет другой заказ.
         """
         if not isinstance(courier, Courier):
             raise TypeError("Ожидается курьер")
         self.validate_courier_assignment()
         if courier is self._courier:
             return
-        courier.occupy()
-        self._unassign_courier()
+        if not courier.is_available:
+            raise InvalidOperationError(
+                f"Курьер {courier.name} уже выполняет заказ #{courier.current_order.id}"
+            )
+        previous = self._courier
         self._courier = courier
+        try:
+            courier.take_order(self)
+        except InvalidOperationError:
+            self._courier = previous
+            raise
+        if previous is not None:
+            previous.release_order(self)
 
     def validate_courier_assignment(self) -> None:
         """Проверяет, можно ли сейчас назначить курьера на заказ.
@@ -206,7 +219,7 @@ class Order:
             raise InvalidOperationError("Сначала назначьте курьера")
         self._status = new_status
         if new_status.is_final and self._courier is not None:
-            self._courier.release()
+            self._courier.release_order(self)
         if new_status is OrderStatus.CANCELLED:
             self._return_items_to_stock()
 
@@ -230,9 +243,10 @@ class Order:
             )
 
     def _unassign_courier(self) -> None:
-        if self._courier is not None:
-            self._courier.release()
+        courier = self._courier
+        if courier is not None:
             self._courier = None
+            courier.release_order(self)
 
     def __str__(self) -> str:
         delivery = self._delivery_method.name if self._delivery_method else "не выбрана"

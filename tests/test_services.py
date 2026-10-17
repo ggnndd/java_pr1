@@ -1,7 +1,13 @@
 import unittest
 from decimal import Decimal
 
-from delivery.models import InvalidOperationError, OrderStatus, StandardDelivery
+from delivery.models import (
+    Customer,
+    InvalidOperationError,
+    Order,
+    OrderStatus,
+    StandardDelivery,
+)
 from delivery.services import (
     CourierService,
     NotFoundError,
@@ -24,7 +30,9 @@ class CourierServiceTest(unittest.TestCase):
 
     def test_available_couriers(self):
         courier = self.service.hire_courier("Пётр", "89001112233")
-        courier.occupy()
+        order = Order(1, Customer("Иван", "89001234567"), "ул. Ленина, 1")
+        order.set_delivery_method(StandardDelivery())
+        order.assign_courier(courier)
         self.assertEqual([], self.service.available_couriers())
 
     def test_unknown_courier(self):
